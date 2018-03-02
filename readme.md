@@ -7,23 +7,18 @@ This plugin does one thing well:
 
 Based on `ripgrep` and `sed`, so you will need to have those installed.
 
+**Neovim only for the moment** (accepting PRs)
+
 ## Usage
 
 Run `:Search function`. This will open a side window with files matches, as below.
 
-```
-### /home/romgrk/github/searchReplace.vim/plugin/searchReplace.vim ###
-34: function! s:run(cmd, cwd, Fn)
-40:     let opts.on_stdout = function('s:on_stdout')
-41:     let opts.on_stderr = function('s:on_stderr')
-42:     let opts.on_exit = function('s:on_exit')
-46: endfunction
-```
+![:Search](https://raw.github.com/romgrk/searchReplace.vim/master/static/window.png)
 
 From here, press `d` on match lines to remove that match, and press `d` on
-filename lines to delete the remove the file from the operation.
+filename lines to remove the whole file from the operation.
 When you're satisfied, run `:Replace fu` to have the remaining matches replaced.
-Done.
+Done. (you'll get a `X replacements in Y files` confirmation)
 
 
 ## Details
