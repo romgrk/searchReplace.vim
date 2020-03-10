@@ -49,4 +49,12 @@ The regex patterns supported are the subset of what is supported by both
 ```vim
 " Closes window on BufLeave event
 let g:searchReplace_closeOnExit = v:true
+
+" The edit comment to use to open files
+let g:searchReplace_editCommand = 'MyEdit'
+
+" for example, this can be used to unfocus the search window
+" before opening the match
+command! -nargs=1 MyEdit :execute 'wincmd p | edit ' . <f-args>
+
 ```
