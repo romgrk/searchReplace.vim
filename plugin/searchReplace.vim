@@ -38,12 +38,10 @@ if !exists('g:searchReplace_editCommand')
     let g:searchReplace_editCommand = 'edit'
 end
 
-hi default link SearchReplaceMatch Search
-hi default link SearchReplaceFile  Directory
-
-
 command! -nargs=* -complete=dir Search    :call <SID>searchCommand(<f-args>)
 command! -nargs=1               Replace   :call <SID>runReplace(<f-args>)
+
+hi default link SearchReplaceMatch Search
 
 function! s:searchCommand (...)
     if a:0 > 1
@@ -276,8 +274,8 @@ function! s:createSearchWindow()
     if g:searchReplace_closeOnExit
         au BufLeave <buffer> bd
     end
-    nnoremap         <silent><buffer>q     <C-W>c
-    nnoremap         <silent><buffer><Esc> <C-W>p
+    nnoremap                 <buffer>q     <C-W>c
+    nnoremap                 <buffer><Esc> <C-W>p
     nnoremap <silent><nowait><buffer>d     :call <SID>search_deleteLine()<CR>
     nnoremap <silent><nowait><buffer>o     :call <SID>search_openLine()<CR>
     nnoremap <silent><nowait><buffer><CR>  :call <SID>search_openLine()<CR>
@@ -286,7 +284,7 @@ function! s:createSearchWindow()
 
     " Add highlights
     call matchadd('Comment', '^> ', 0)
-    call matchadd('SearchReplaceFile', '\v(\> )@<=.*', 0)
+    call matchadd('Directory', '\v(\> )@<=.*', 0)
     call matchadd('LineNr', '\v^\d+:', 0)
 endfunction
 
@@ -326,16 +324,16 @@ function! s:createPromptWindow()
     au BufLeave <buffer> bd
 
     " Create mappings
-    nnoremap         <silent><buffer><Esc> <C-w>c
-    inoremap         <silent><buffer><Esc> <Esc><C-w>c
-    inoremap         <silent><buffer><C-c> <Esc>
-    inoremap         <silent><buffer><CR>  <Esc>:call <SID>prompt_enter()<CR>
-    inoremap         <silent><buffer><TAB> <Esc>:call <SID>prompt_tab()<CR>
-    inoremap         <silent><buffer><C-u> <Esc>:call <SID>prompt_clearLine()<CR>
+    nnoremap                 <buffer><Esc> <C-w>c
+    inoremap                 <buffer><Esc> <Esc><C-w>c
+    inoremap                 <buffer><C-c> <Esc>
+    inoremap                 <buffer><CR>  <Esc>:call <SID>prompt_enter()<CR>
+    inoremap                 <buffer><TAB> <Esc>:call <SID>prompt_tab()<CR>
+    inoremap                 <buffer><C-u> <Esc>:call <SID>prompt_clearLine()<CR>
 
-    nnoremap         <silent><buffer>o     <Nop>
-    nnoremap         <silent><buffer>O     <Nop>
-    nnoremap         <silent><buffer>dd    <Nop>
+    nnoremap                 <buffer>o     <Nop>
+    nnoremap                 <buffer>O     <Nop>
+    nnoremap                 <buffer>dd    <Nop>
 
     " Add highlights
     call matchadd('StatusLine', s:promptPattern)
