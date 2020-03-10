@@ -5,7 +5,11 @@ This plugin does one thing well:
  - displays the matches & lets you delete matches you don't want to replace,
  - replace those matches with a new pattern
 
-Based on `ripgrep` and `sed`, so you will need to have those installed.
+**Dependencies**
+
+ - neovim (with floating windows)
+ - ripgrep (with `--json` support)
+ - sed
 
 WARNING: The supported regex syntax is the intersection of what both `ripgrep`
 and `sed` support. Figuring that out is left as an exercice for the reader.
