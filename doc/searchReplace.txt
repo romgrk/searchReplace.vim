@@ -133,6 +133,8 @@ Prompt window
 | `<Tab>`      | Switches to the next prompt input section            |
 | `<CR>`       | Executes the search                                  |
 | `<C-u>`      | Clear the input                                      |
+| `<A-w>`      | Switch match-word-boundary mode                      |
+| `<A-i>`      | Switch case-insensitive mode                         |
 ---------------------------------------------------------------------
 
 Search results window

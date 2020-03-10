@@ -5,11 +5,13 @@
 " Description: Search & Replace plugin
 "============================================================================
 
-let s:isSearching = v:false
 let s:directory = '.'
 let s:pattern = ''
 let s:paths = []
+let s:caseSensitive = v:true
 let s:replacement = ''
+
+let s:isSearching = v:false
 let s:totalMatches = 0
 let s:waitingCount = 0
 let s:totalReplacements = 0
@@ -25,6 +27,8 @@ let s:searchWindowId = v:null
 
 let s:promptPattern     = 'Pattern      '
 let s:promptDirectories = 'Directories  '
+let s:promptPatternRe   = '\vPattern (   |\[i\])  '
+
 
 let s:command = v:null
 let s:commandWithColumns = v:null
@@ -71,6 +75,7 @@ function! s:runSearch()
 
     let s:command =
         \ "rg --json "
+        \ . (s:caseSensitive ? "" : "--ignore-case ")
         \ . join(map(copy(s:paths), {_,v -> '--glob ' . shellescape(v)}), " ")
         \ . " " . shellescape(s:pattern)
 
@@ -331,16 +336,18 @@ function! s:createPromptWindow()
     nnoremap                 <buffer><Esc> <C-w>c
     inoremap                 <buffer><Esc> <Esc><C-w>c
     inoremap                 <buffer><C-c> <Esc>
-    inoremap                 <buffer><CR>  <Esc>:call <SID>prompt_enter()<CR>
-    inoremap                 <buffer><TAB> <Esc>:call <SID>prompt_tab()<CR>
-    inoremap                 <buffer><C-u> <Esc>:call <SID>prompt_clearLine()<CR>
+    inoremap         <silent><buffer><CR>  <Esc>:call <SID>prompt_enter()<CR>
+    inoremap         <silent><buffer><TAB> <Esc>:call <SID>prompt_tab()<CR>
+    inoremap         <silent><buffer><C-u> <Esc>:call <SID>prompt_clearLine()<CR>
+    inoremap         <silent><buffer><A-w> <Esc>:call <SID>prompt_switchWordMode()<CR>
+    inoremap <silent><nowait><buffer><A-i> <Esc>:call <SID>prompt_switchCaseSensitiveMode()<CR>
 
     nnoremap                 <buffer>o     <Nop>
     nnoremap                 <buffer>O     <Nop>
     nnoremap                 <buffer>dd    <Nop>
 
     " Add highlights
-    call matchadd('SearchReplaceLabel', s:promptPattern)
+    call matchadd('SearchReplaceLabel', s:promptPatternRe)
     call matchadd('SearchReplaceLabel', s:promptDirectories)
 
     " Add text
@@ -440,6 +447,28 @@ function! s:prompt_clearLine ()
     call feedkeys('A', 'n')
 endfunc
 
+function! s:prompt_switchWordMode ()
+    let s:pattern = s:extractPattern(getline(1))
+    if s:pattern[0:1] ==# '\b' && s:pattern[-2:-1] ==# '\b'
+        let s:pattern = s:pattern[2:-3]
+    else
+        let s:pattern = '\b' . s:pattern . '\b'
+    end
+    call setline(1, s:promptPattern . s:pattern)
+    call feedkeys('A', 'n')
+endfunc
+
+function! s:prompt_switchCaseSensitiveMode ()
+    if s:caseSensitive
+        let s:caseSensitive = v:false
+    else
+        let s:caseSensitive = v:true
+    end
+    let s:promptPattern = 'Pattern ' . (s:caseSensitive ? '   ' : '[i]') . '  '
+    call setline(1, s:promptPattern . s:pattern)
+    call feedkeys('A', 'n')
+endfunc
+
 function! s:search_deleteLine()
     let text = getline('.')
     let firstLine = line('.')
@@ -492,7 +521,7 @@ function! s:extractLineNumber (line)
 endfunc
 
 function! s:extractPattern (line)
-    return substitute(a:line, s:promptPattern, '', '')
+    return substitute(a:line, s:promptPatternRe, '', '')
 endfunc
 
 function! s:extractDirectories (line)
