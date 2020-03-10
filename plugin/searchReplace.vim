@@ -41,7 +41,11 @@ end
 command! -nargs=* -complete=dir Search    :call <SID>searchCommand(<f-args>)
 command! -nargs=1               Replace   :call <SID>runReplace(<f-args>)
 
-hi default link SearchReplaceMatch Search
+hi default link SearchReplaceMatch  Search
+hi default link SearchReplaceFile   Directory
+hi default link SearchReplacePopup  NormalPopup
+hi default link SearchReplaceLabel  StatusLine
+hi default link NormalPopup         Pmenu
 
 function! s:searchCommand (...)
     if a:0 > 1
@@ -319,7 +323,7 @@ function! s:createPromptWindow()
     " setlocal nonumber
     setlocal buftype=nofile
     setlocal nobuflisted
-    setlocal winhl=Normal:NormalPopup,EndOfBuffer:NormapPopup
+    setlocal winhl=Normal:SearchReplacePopup,EndOfBuffer:SearchReplacePopup
 
     au BufLeave <buffer> bd
 
@@ -336,8 +340,8 @@ function! s:createPromptWindow()
     nnoremap                 <buffer>dd    <Nop>
 
     " Add highlights
-    call matchadd('StatusLine', s:promptPattern)
-    call matchadd('StatusLine', s:promptDirectories)
+    call matchadd('SearchReplaceLabel', s:promptPattern)
+    call matchadd('SearchReplaceLabel', s:promptDirectories)
 
     " Add text
     call append(0, s:promptPattern . s:pattern)

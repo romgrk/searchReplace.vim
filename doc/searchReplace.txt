@@ -86,6 +86,20 @@ SearchReplaceFile                                             *SearchReplaceFile
 
   The highlight for file names
 
+SearchReplacePopup                                           *SearchReplacePopup*
+
+  Default:
+    `hi default link SearchReplacePopup  NormalPopup`
+    `hi default link NormalPopup         Pmenu`
+
+  The highlight for the popup window
+
+SearchReplaceLabel                                           *SearchReplaceLabel*
+
+  Default: `hi default link SearchReplaceLabel StatusLine`
+
+  The highlight for the popup input labels
+
 
 ===============================================================================
 4. Commands                                              *searchReplace-commands*
