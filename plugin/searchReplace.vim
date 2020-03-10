@@ -1,64 +1,63 @@
 "============================================================================
 " File: searchReplace.vim
 " Author: romgrk
-" Date: 02 Mar 2018
+" Date: 10 Mar 2020
 " Description: Search & Replace plugin
 "============================================================================
 
 let s:isSearching = v:false
 let s:directory = '.'
-let s:paths = ['.']
 let s:pattern = ''
+let s:paths = []
 let s:replacement = ''
 let s:totalMatches = 0
 let s:waitingCount = 0
 let s:totalReplacements = 0
 let s:replacementFiles = []
 let s:replacementJobs = []
+let s:job = {}
 let s:search = {}
-let s:searchMatches = {}
-let s:isSearchDone = v:false
-let s:isSearchMatchesDone = v:false
+let s:matches = []
 let s:position = 'right'
+
+let s:promptWindowId = v:null
+let s:searchWindowId = v:null
+
+let s:promptPattern     = 'Pattern      '
+let s:promptDirectories = 'Directories  '
+
+let s:command = v:null
+let s:commandWithColumns = v:null
+
+let s:hlNamespace = nvim_create_namespace('SearchReplace')
 
 if !exists('g:searchReplace_closeOnExit')
     let g:searchReplace_closeOnExit = v:true
 end
-
-command! -nargs=* -complete=dir Search    :call <SID>runSearch(<f-args>)
-command! -nargs=1               Replace   :call <SID>runReplace(<f-args>)
+if !exists('g:searchReplace_editCommand')
+    let g:searchReplace_editCommand = 'edit'
+end
 
 hi default link SearchReplaceMatch Search
+hi default link SearchReplaceFile  Directory
 
-" runs a command then calls Fn handler
-function! s:run(cmd, cwd, Fn)
-    let opts = {}
-    let opts.cmd = a:cmd
-    let opts.cwd = fnamemodify(expand(a:cwd), ':p')
-    let opts.stdout = []
-    let opts.stderr = []
-    let opts.on_stdout = function('s:on_stdout')
-    let opts.on_stderr = function('s:on_stderr')
-    let opts.on_exit = function('s:on_exit')
-    let opts.handler = a:Fn
-    let opts.jobID = jobstart(a:cmd, opts)
-    return opts
-endfunction
-function! s:on_stdout(jobID, data, event) dict
-    call extend(self.stdout, a:data)
-endfunction
-function! s:on_stderr(jobID, data, event) dict
-    call extend(self.stderr, a:data)
-endfunction
-function! s:on_exit(...) dict
-    let self.stdout = filter(self.stdout, "v:val != ''")
-    let self.stderr = filter(self.stderr, "v:val != ''")
-    call self.handler(self)
-endfunction
 
-function! s:runSearch(pattern, ...)
-    let s:paths = a:000
-    let s:pattern = a:pattern
+command! -nargs=* -complete=dir Search    :call <SID>searchCommand(<f-args>)
+command! -nargs=1               Replace   :call <SID>runReplace(<f-args>)
+
+function! s:searchCommand (...)
+    if a:0 > 1
+        let s:pattern = a:000[0]
+        let s:paths   = a:000[1:]
+        call s:runSearch()
+    else
+        call s:createPromptWindow()
+    end
+endfunc
+
+function! s:runSearch()
+    " global s:pattern
+    " global s:paths
     let s:replacement = ''
     let s:totalMatches = 0
     let s:waitingCount = 0
@@ -66,21 +65,31 @@ function! s:runSearch(pattern, ...)
     let s:replacementFiles = []
     let s:replacementJobs = []
     let s:search = {}
-    let s:searchMatches = {}
-    let s:isSearchDone = v:false
-    let s:isSearchMatchesDone = v:false
+    let s:matches = []
 
-    call s:run(
-            \ "rg -nH " . shellescape(s:pattern) . " " . join(s:paths),
-            \ s:directory,
-            \ function('s:onExitSearch'))
-    call s:run(
-            \ "rg -nHo --column " . shellescape(s:pattern) . " " . join(s:paths),
-            \ s:directory,
-            \ function('s:onExitSearchMatches'))
+    let s:command =
+        \ "rg --json "
+        \ . join(map(copy(s:paths), {_,v -> '--glob ' . shellescape(v)}), " ")
+        \ . " " . shellescape(s:pattern)
+
+    let s:job = {}
+    let s:job.cmd = s:command
+    let s:job.cwd = fnamemodify(expand(s:directory), ':p')
+    let s:job.buffer = v:null
+    let s:job.stdout = []
+    let s:job.stderr = []
+    let s:job.didExit = v:false
+    let s:job.on_stdout = function('s:onStdout')
+    let s:job.on_stderr = function('s:onStderr')
+    let s:job.on_exit = function('s:onExit')
+    let s:job.jobID = jobstart(s:job.cmd, s:job)
 
     call s:echo('WarningMsg', 'Running search for ')
     call s:echo('Normal', s:pattern)
+
+    let s:isSearching = v:true
+
+    call s:createSearchWindow()
 endfunction
 
 function! s:runReplace(replacement)
@@ -99,8 +108,8 @@ function! s:runReplace(replacement)
     let currentFile = ''
     for n in range(1, line('$'))
         let text = getline(n)
-        if text =~ '^###'
-            let currentFile = text[4:-5]
+        if text =~ '^> '
+            let currentFile = s:extractFilename(text)
             let matches[currentFile] = []
         else
             let line = matchstr(text, '\v\d+:@=')
@@ -129,95 +138,78 @@ function! s:runReplace(replacement)
     call s:echo('Normal', ' files')
 endfunction
 
-function! s:onExitSearch(job)
-    let parts = map(a:job.stdout, "split(v:val, ':')")
+function! s:onStdout(jobID, data, event) dict
+    call extend(self.stdout, a:data)
 
-    let s:search = {}
-    let s:totalMatches = 0
-    for p in parts
-        if len(p) < 3
-            continue
+    let matches = s:filterData(a:data)
+    for m in matches
+        let text = m
+        if s:job.buffer != v:null
+            let text .= s:job.buffer
+            let s:job.buffer = v:null
         end
-        let file = p[0]
-        let line = p[1]
-        let text = join(p[2:], ':')
-
-        if !has_key(s:search, file)
-            let s:search[file] = []
-        end
-        call add(s:search[file], { 'line': line, 'text': text })
-        let s:totalMatches = s:totalMatches + 1
+        let jsonData = v:null
+        try
+            let jsonData = json_decode(m)
+        catch
+            let s:job.buffer = m
+            return
+        endtry
+        call s:appendMatch(jsonData)
     endfor
-
-    let s:isSearchDone = v:true
-    call s:onSearchDone()
 endfunction
 
-function! s:onExitSearchMatches(job)
-    let parts = map(a:job.stdout, "split(v:val, ':')")
-
-    let s:searchMatches = {}
-    for p in parts
-        if len(p) < 4
-            continue
-        end
-        let file = p[0]
-        let line = p[1]
-        let col  = p[2]
-        let text = substitute(join(p[3:], ':'), '^\s\+', '', '')
-
-        if !has_key(s:searchMatches, file)
-            let s:searchMatches[file] = []
-        end
-        call add(s:searchMatches[file], { 'line': str2nr(line), 'col': str2nr(col), 'text': text })
-    endfor
-
-    let s:isSearchMatchesDone = v:true
-    call s:onSearchDone()
+function! s:onStderr(jobID, data, event) dict
+    call extend(self.stderr, a:data)
 endfunction
 
-function! s:onSearchDone()
-    if !(s:isSearchDone && s:isSearchMatchesDone)
-        return
-    end
+function! s:onExit(...) dict
+    let self.didExit = v:true
+    let self.stdout = filter(self.stdout, "v:val != ''")
+    let self.stderr = filter(self.stderr, "v:val != ''")
 
-    if len(s:search) == 0
+    if len(s:matches) == 0
         call s:echo('WarningMsg', 'No match found for ')
         call s:echo('Normal', s:pattern)
+        call s:closeSearchWindow()
         return
     end
 
-    let s:isSearching = v:true
+    call s:echo('WarningMsg', 'Search completed')
+endfunction
 
-    call s:createSearchWindow()
+function! s:appendMatch(match)
+    if a:match.type == 'begin'
+        if len(s:matches) == 0
+            call setline(1, '> ' . (a:match.data.path.text))
+        else
+            call append(line('$'), '')
+            call append(line('$'), '> ' . (a:match.data.path.text))
+        end
+        return
+    end
 
-    " Display content
-    let lastFile = ''
-    for file in keys(s:search)
-        let matches = s:search[file]
-        let searchMatches = s:searchMatches[file]
+    if a:match.type != 'match'
+        return
+    end
 
-        call append(line('$'), '### ' . file . ' ###')
+    call add(s:matches, a:match)
 
-        for i in range(len(matches))
-            let m  = matches[i]
-            let sm = searchMatches[i]
+    let prefix = '' . a:match.data.line_number . ': '
+    let lineNumber = line('$')
 
-            let prefix = '' . m.line . ': '
+    call append(lineNumber, prefix . substitute(a:match.data.lines.text, '\n', '', ''))
 
-            let lineNumber = line('$')
+    for submatch in a:match.data.submatches
+        let lineNumber = line('$') - 1
+        let length = len(submatch.match.text)
+        let columnStart = submatch.start + len(prefix)
+        let columnEnd = columnStart + length
 
-            call append(lineNumber, prefix . m.text)
-
-            let pos = [lineNumber, sm.col + len(prefix), len(sm.text)]
-
-            call matchaddpos('SearchReplaceMatch', [pos])
-        endfor
+        call nvim_buf_add_highlight(
+            \ 0, s:hlNamespace, 'SearchReplaceMatch',
+            \ lineNumber, columnStart, columnEnd)
     endfor
-    normal! dd
-    call matchadd('Comment', '###')
-    call matchadd('Directory', '\v(###)@<=.*(###)@=')
-    call matchadd('Label', '\v^\d+:')
 endfunction
 
 function! s:onExitReplace(job)
@@ -243,11 +235,11 @@ function! s:createSearchWindow()
         if len(winids) > 0
             call win_gotoid(winids[0])
             normal! ggdG
-            call clearmatches()
+            call nvim_buf_clear_namespace(0, s:hlNamespace, 0, -1)
             return
-        else
-            execute bufnr('SearchReplace') . 'bwipe!'
         end
+
+        execute bufnr('SearchReplace') . 'bwipe!'
     end
 
     split
@@ -271,19 +263,126 @@ function! s:createSearchWindow()
     end
 
     enew
+    file SearchReplace
     setlocal nonumber
     setlocal buftype=nofile
-    file SearchReplace
-    let s:lastBufnr = bufnr('%')
+    setlocal nobuflisted
+    setlocal foldmethod=expr
+    setlocal foldexpr=SearchWindowFoldLevel(v:lnum)
+
+    let s:searchWindowId = win_getid()
 
     " Create mappings
     if g:searchReplace_closeOnExit
         au BufLeave <buffer> bd
     end
-    nnoremap                 <buffer><Esc> <C-W>p
-    nnoremap         <nowait><buffer><A-r> :Replace<space>
-    nnoremap         <nowait><buffer><CR>  :Replace<space>
-    nnoremap <silent><nowait><buffer>d     :call <SID>deleteLine()<CR>
+    nnoremap         <silent><buffer>q     <C-W>c
+    nnoremap         <silent><buffer><Esc> <C-W>p
+    nnoremap <silent><nowait><buffer>d     :call <SID>search_deleteLine()<CR>
+    nnoremap <silent><nowait><buffer>o     :call <SID>search_openLine()<CR>
+    nnoremap <silent><nowait><buffer><CR>  :call <SID>search_openLine()<CR>
+    nnoremap   <expr><nowait><buffer><A-r> <SID>replaceMapping()
+    nnoremap   <expr><nowait><buffer><C-r> <SID>replaceMapping()
+
+    " Add highlights
+    call matchadd('Comment', '^> ', 0)
+    call matchadd('SearchReplaceFile', '\v(\> )@<=.*', 0)
+    call matchadd('LineNr', '\v^\d+:', 0)
+endfunction
+
+function! s:createPromptWindow()
+    " Go to existing window if there is one
+    if bufnr('SearchReplace__prompt') != -1
+        let winids = win_findbuf(bufnr('SearchReplace__prompt'))
+        if len(winids) > 0
+            call win_gotoid(winids[0])
+            call feedkeys('ggA', 'n')
+            return
+        end
+
+        execute bufnr('SearchReplace__prompt') . 'bwipe!'
+    end
+
+    let width = &columns
+    let col = (&columns - width)
+    let row = &lines - &cmdheight - 1
+    let s:promptWindowId = nvim_open_win(0, v:true, {
+    \   'style': 'minimal',
+    \   'anchor': 'SE',
+    \   'relative': 'editor',
+    \   'row': row,
+    \   'col': col,
+    \   'width': width,
+    \   'height': 2
+    \ })
+
+    enew
+    file SearchReplace__prompt
+    " setlocal nonumber
+    setlocal buftype=nofile
+    setlocal nobuflisted
+    setlocal winhl=Normal:NormalPopup,EndOfBuffer:NormapPopup
+
+    au BufLeave <buffer> bd
+
+    " Create mappings
+    nnoremap         <silent><buffer><Esc> <C-w>c
+    inoremap         <silent><buffer><Esc> <Esc><C-w>c
+    inoremap         <silent><buffer><C-c> <Esc>
+    inoremap         <silent><buffer><CR>  <Esc>:call <SID>prompt_enter()<CR>
+    inoremap         <silent><buffer><TAB> <Esc>:call <SID>prompt_tab()<CR>
+    inoremap         <silent><buffer><C-u> <Esc>:call <SID>prompt_clearLine()<CR>
+
+    nnoremap         <silent><buffer>o     <Nop>
+    nnoremap         <silent><buffer>O     <Nop>
+    nnoremap         <silent><buffer>dd    <Nop>
+
+    " Add highlights
+    call matchadd('StatusLine', s:promptPattern)
+    call matchadd('StatusLine', s:promptDirectories)
+
+    " Add text
+    call append(0, s:promptPattern . s:pattern)
+    call append(1, s:promptDirectories . join(s:paths, ', '))
+
+    call feedkeys('ggA', 'n')
+endfunction
+
+function! s:closeSearchWindow ()
+    if s:searchWindowId == v:null
+        return
+    end
+
+    if !win_gotoid(s:searchWindowId)
+        return
+    end
+
+    wincmd c
+
+    let s:searchWindowId = v:null
+    let s:isSearching = v:false
+endfunction
+
+function! s:closePromptWindow ()
+    if s:promptWindowId == v:null
+        return
+    end
+
+    if !win_gotoid(s:promptWindowId)
+        return
+    end
+
+    wincmd c
+
+    let s:promptWindowId = v:null
+endfunction
+
+function! s:replaceMapping()
+    if !s:job.didExit
+        call s:echo('WarningMsg', 'Search is not completed yet')
+        return "\<nop>"
+    end
+    return ":Replace\<space>"
 endfunction
 
 function! s:displayDone(...)
@@ -317,18 +416,60 @@ function! s:displayDone(...)
     call s:echo('Normal', ' files )')
 endfunction
 
-function! s:deleteLine()
+function! s:prompt_enter ()
+    let s:pattern = s:extractPattern(getline(1))
+    let s:paths   = s:extractDirectories(getline(2))
+    call s:closePromptWindow()
+    call s:runSearch()
+endfunc
+
+function! s:prompt_tab ()
+    let currentLine = line('.')
+    let newLine = currentLine == 1 ? 2 : 1
+    Pp [0, newLine, newCol, 0]
+    call setpos('.', [0, newLine, 1, 0])
+    call feedkeys('A', 'n')
+endfunc
+
+function! s:prompt_clearLine ()
+    let currentLine = line('.')
+    let text = currentLine == 1 ? s:promptPattern : s:promptDirectories
+    call setline(currentLine, text)
+    call feedkeys('A', 'n')
+endfunc
+
+function! s:search_deleteLine()
     let text = getline('.')
     let firstLine = line('.')
-    if text =~ '^###'
-        let lastLine = searchpos('^###', 'n')[0] - 1
+    if text =~ '^> '
+        let lastLine = searchpos('^> ', 'n')[0] - 1
         if lastLine == 0
             let lastLine = line('$')
         end
         execute firstLine . ',' . lastLine . 'delete _'
-    else
+    elseif text =~ '^\d\+:'
         execute firstLine . 'delete _'
     end
+endfunction
+
+function! s:search_openLine()
+    let text = getline('.')
+    let firstLine = line('.')
+    if text =~ '^> '
+        let filename = s:extractFilename(text)
+        execute g:searchReplace_editCommand . ' ' . filename
+    elseif text =~ '^\d\+:'
+        let lineNumber = s:extractLineNumber(getline('.'))
+        let previousFilenameLine = search('^> .*', 'nb')
+        let filenameLine = getline(previousFilenameLine)
+        let filename = s:extractFilename(filenameLine)
+        execute g:searchReplace_editCommand . ' ' . filename
+        execute 'normal! ' . lineNumber . 'ggzz'
+    end
+endfunction
+
+function! s:filterData(data)
+    return filter(a:data, "v:val != ''")
 endfunction
 
 function! s:escape(pattern)
@@ -340,4 +481,57 @@ function! s:echo(hlgroup, ...)
     echon join(a:000)
 endfunction
 
-let g:SearchReplace = s:
+function! s:extractFilename (line)
+    return a:line[2:]
+endfunc
+
+function! s:extractLineNumber (line)
+    return substitute(a:line, ':.*', '', '')
+endfunc
+
+function! s:extractPattern (line)
+    return substitute(a:line, s:promptPattern, '', '')
+endfunc
+
+function! s:extractDirectories (line)
+    let input = substitute(a:line, s:promptDirectories, '', '')
+    let dirs = split(input, '\s*,\s*')
+    return dirs
+endfunc
+
+function! SearchWindowFoldLevel (lnum)
+    let line = getline(a:lnum)
+    if len(line) == 0
+        return 0
+    end
+    return 1
+endfunc
+
+" runs a command then calls Fn handler
+function! s:run(cmd, cwd, Fn)
+    let opts = {}
+    let opts.cmd = a:cmd
+    let opts.cwd = fnamemodify(expand(a:cwd), ':p')
+    let opts.stdout = []
+    let opts.stderr = []
+    let opts.on_stdout = function('s:on_stdout')
+    let opts.on_stderr = function('s:on_stderr')
+    let opts.on_exit = function('s:on_exit')
+    let opts.handler = a:Fn
+    let opts.jobID = jobstart(a:cmd, opts)
+    return opts
+endfunction
+function! s:on_stdout(jobID, data, event) dict
+    call extend(self.stdout, a:data)
+endfunction
+function! s:on_stderr(jobID, data, event) dict
+    call extend(self.stderr, a:data)
+endfunction
+function! s:on_exit(...) dict
+    let self.stdout = filter(self.stdout, "v:val != ''")
+    let self.stderr = filter(self.stderr, "v:val != ''")
+    call self.handler(self)
+endfunction
+
+
+let g:searchReplace = s:
