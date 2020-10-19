@@ -22,6 +22,7 @@ let s:search = {}
 let s:matches = []
 let s:position = 'right'
 
+let s:parentWindowId = v:null
 let s:promptWindowId = v:null
 let s:searchWindowId = v:null
 
@@ -75,7 +76,7 @@ function! s:runSearch()
 
     let s:command =
         \ "rg --json "
-        \ . (s:caseSensitive ? "" : "--ignore-case ")
+        \ . (s:caseSensitive ? "" : "--smart-case ")
         \ . join(map(copy(s:paths), {_,v -> '--glob ' . shellescape(v)}), " ")
         \ . " " . shellescape(s:pattern)
 
@@ -95,6 +96,7 @@ function! s:runSearch()
     call s:echo('Normal', s:pattern)
 
     let s:isSearching = v:true
+    let s:parentWindowId = win_getid()
 
     call s:createSearchWindow()
 endfunction
@@ -181,6 +183,14 @@ function! s:onExit(...) dict
         call s:closeSearchWindow()
         return
     end
+
+    let locations = map(deepcopy(s:matches), {_, m -> #{
+        \ filename: m.data.path.text,
+        \ lnum: m.data.line_number,
+        \ col: m.data.submatches[0].start,
+        \ text: trim(m.data.lines.text),
+        \ }})
+    call setloclist(s:parentWindowId, locations)
 
     call s:echo('WarningMsg', 'Search completed')
 endfunction
@@ -286,8 +296,8 @@ function! s:createSearchWindow()
     nnoremap                 <buffer>q     <C-W>c
     nnoremap                 <buffer><Esc> <C-W>p
     nnoremap <silent><nowait><buffer>d     :call <SID>search_deleteLine()<CR>
-    nnoremap <silent><nowait><buffer>o     :call <SID>search_openLine()<CR>
-    nnoremap <silent><nowait><buffer><CR>  :call <SID>search_openLine()<CR>
+    nnoremap <silent><nowait><buffer>o     :call <SID>search_previewLine()<CR>
+    nnoremap <silent><nowait><buffer><CR>  :call <SID>search_editLine()<CR>
     nnoremap   <expr><nowait><buffer><A-r> <SID>replaceMapping()
     nnoremap   <expr><nowait><buffer><C-r> <SID>replaceMapping()
 
@@ -464,7 +474,7 @@ function! s:prompt_switchCaseSensitiveMode ()
     else
         let s:caseSensitive = v:true
     end
-    let s:promptPattern = 'Pattern ' . (s:caseSensitive ? '   ' : '[i]') . '  '
+    let s:promptPattern = 'Pattern ' . (s:caseSensitive ? '   ' : '[s]') . '  '
     call setline(1, s:promptPattern . s:pattern)
     call feedkeys('A', 'n')
 endfunc
@@ -483,7 +493,7 @@ function! s:search_deleteLine()
     end
 endfunction
 
-function! s:search_openLine()
+function! s:search_editLine()
     let text = getline('.')
     let firstLine = line('.')
     if text =~ '^> '
@@ -495,8 +505,14 @@ function! s:search_openLine()
         let filenameLine = getline(previousFilenameLine)
         let filename = s:extractFilename(filenameLine)
         execute g:searchReplace_editCommand . ' ' . filename
-        execute 'normal! ' . lineNumber . 'ggzz'
+        execute 'normal! ' . lineNumber . 'gg'
     end
+    normal! zvzz
+endfunction
+
+function! s:search_previewLine()
+    call s:search_editLine()
+    wincmd p
 endfunction
 
 function! s:filterData(data)
