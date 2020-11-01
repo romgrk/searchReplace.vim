@@ -333,12 +333,13 @@ function! s:createPromptWindow()
     \   'height': 2
     \ })
 
-    enew
+    noautocmd enew
     file SearchReplace__prompt
     " setlocal nonumber
     setlocal buftype=nofile
     setlocal nobuflisted
     setlocal winhl=Normal:SearchReplacePopup,EndOfBuffer:SearchReplacePopup
+    setlocal filetype=text
 
     au BufLeave <buffer> bd
 
