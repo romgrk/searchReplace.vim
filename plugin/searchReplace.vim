@@ -53,7 +53,7 @@ hi default link SearchReplaceLabel  StatusLine
 hi default link NormalPopup         Pmenu
 
 function! s:searchCommand (...)
-    if a:0 > 1
+    if a:0 > 0
         let s:pattern = a:000[0]
         let s:paths   = a:000[1:]
         call s:runSearch()
