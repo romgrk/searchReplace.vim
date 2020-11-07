@@ -52,9 +52,9 @@ Dependencies:
 
 
 ===============================================================================
-3. Global Options                                                 *searchReplace-options*
+3. Global Options                                         *searchReplace-options*
 
-g:searchReplace_closeOnExit                         *g:searchReplace_closeOnExit*
+g:searchReplace.close_on_exit                      *g:searchReplace.close_on_exit*
 
   Type: |Boolean|
   Default: `v:true`
@@ -62,12 +62,19 @@ g:searchReplace_closeOnExit                         *g:searchReplace_closeOnExit
   Close the search results window as soon as it looses focus
 
 
-g:searchReplace_editCommand                        *g:searchReplace_editCommand*
+g:searchReplace.edit_command                       *g:searchReplace.edit_command*
 
   Type: |String|
   Default: `'edit'`
 
   The command with which to open files.
+
+g:searchReplace.open_window                       *g:searchReplace.open_window*
+
+  Type: |Function|
+  Default: `v:nul`
+
+  A function to open or focus the search window yourself.
 
 -------------------------------------------------------------------------------
 3.1. Highlights                                        *searchReplace-highlights*

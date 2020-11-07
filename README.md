@@ -61,4 +61,7 @@ let g:searchReplace.edit_command = 'EditPreviousWindow'
 " before opening the match
 command! -nargs=1 EditPreviousWindow :execute 'wincmd p | edit ' . <f-args>
 
+" Open the search window yourself
+let g:searchReplace.open_window = {->execute('aboveleft split')}
+
 ```
