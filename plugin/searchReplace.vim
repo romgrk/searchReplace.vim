@@ -325,6 +325,8 @@ function! s:createPromptWindow()
         execute bufnr('SearchReplace__prompt') . 'bwipe!'
     end
 
+    let is_search_open = !empty(win_findbuf(bufnr('SearchReplace')))
+
     let width = &columns
     let col = (&columns - width)
     let row = &lines - &cmdheight - 1
@@ -367,7 +369,7 @@ function! s:createPromptWindow()
     call matchadd('SearchReplaceLabel', s:promptDirectories)
 
     " Add text
-    call append(0, s:promptPattern . s:pattern)
+    call append(0, s:promptPattern . (is_search_open ? s:pattern : ''))
     call append(1, s:promptDirectories . join(s:paths, ', '))
 
     call feedkeys('ggA', 'n')
