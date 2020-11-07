@@ -20,11 +20,15 @@ and `sed` support. Figuring that out is left as an exercice for the reader.
 
 ## Usage
 
-Run `:Search` to open the prompt window, or `:Search pattern` to search directly.
+Run `:Search` to open the prompt window, or `:Search pattern [directories]` to search directly.
 
 Add this to your vimrc to open the search prompt quickly.
 ```vim
-nnoremap <silent><C-f> :Search<CR>
+" Open search prompt
+nnoremap <silent><C-f><C-f> :Search<CR>
+" Search directly for word under cursor
+nnoremap <silent><C-f><C-w> :Search <C-R><C-W><CR>
+nnoremap <silent><C-f>w     :Search <C-R><C-W><CR>
 ```
 
 ![:Search](https://raw.github.com/romgrk/searchReplace.vim/master/static/search-replace.png)
