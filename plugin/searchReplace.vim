@@ -197,11 +197,12 @@ endfunction
 
 function! s:appendMatch(match)
     if a:match.type == 'begin'
+        let filepath = a:match.data.path.text
         if len(s:matches) == 0
-            call setline(1, '> ' . (a:match.data.path.text))
+            call setline(1, '> ' . (filepath))
         else
             call append(line('$'), '')
-            call append(line('$'), '> ' . (a:match.data.path.text))
+            call append(line('$'), '> ' . (filepath))
         end
         return
     end
@@ -215,13 +216,17 @@ function! s:appendMatch(match)
     let prefix = '' . a:match.data.line_number . ': '
     let lineNumber = line('$')
 
-    call append(lineNumber, prefix . substitute(a:match.data.lines.text, '\n', '', ''))
+    let text = substitute(a:match.data.lines.text, '\n', '', '')
+    let initial_length = len(text)
+    let text = substitute(text, '\v^\s*', '', '')
+    let offset = initial_length - len(text)
+    call append(lineNumber, prefix . text)
 
     for submatch in a:match.data.submatches
         let lineNumber = line('$') - 1
         let length = len(submatch.match.text)
-        let columnStart = submatch.start + len(prefix)
-        let columnEnd = columnStart + length
+        let columnStart = submatch.start + len(prefix) - offset
+        let columnEnd   = columnStart + length
 
         call nvim_buf_add_highlight(
             \ 0, s:hlNamespace, 'SearchReplaceMatch',
