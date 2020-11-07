@@ -5,6 +5,12 @@
 " Description: Search & Replace plugin
 "============================================================================
 
+let searchReplace = extend({
+\  'close_on_exit': get(g:, 'searchReplace_closeOnExit', v:true),
+\  'edit_command': get(g:, 'searchReplace_editCommand', 'edit'),
+\  'open_window': v:null,
+\}, get(g:, 'searchReplace', {}))
+
 let s:directory = '.'
 let s:pattern = ''
 let s:paths = []
@@ -35,13 +41,6 @@ let s:command = v:null
 let s:commandWithColumns = v:null
 
 let s:hlNamespace = nvim_create_namespace('SearchReplace')
-
-if !exists('g:searchReplace_closeOnExit')
-    let g:searchReplace_closeOnExit = v:true
-end
-if !exists('g:searchReplace_editCommand')
-    let g:searchReplace_editCommand = 'edit'
-end
 
 command! -nargs=* -complete=dir Search    :call <SID>searchCommand(<f-args>)
 command! -nargs=1               Replace   :call <SID>runReplace(<f-args>)
@@ -250,7 +249,7 @@ function! s:onExitReplace(job)
     call timer_start(100, function('s:displayDone'))
 endfunction
 
-function! s:createSearchWindow()
+function! s:createSearchWindow() abort
     " Go to existing window if there is one
     if bufnr('SearchReplace') != -1
         let winids = win_findbuf(bufnr('SearchReplace'))
@@ -264,24 +263,28 @@ function! s:createSearchWindow()
         execute bufnr('SearchReplace') . 'bwipe!'
     end
 
-    split
+    if g:searchReplace.open_window != v:null
+        call g:searchReplace.open_window()
+    else
+        split
 
-    if s:position == 'bottom' || s:position == 'top'
-        if s:position == 'bottom'
-            wincmd J
-        elseif s:position == 'top'
-            wincmd K
-        end
+        if s:position == 'bottom' || s:position == 'top'
+            if s:position == 'bottom'
+                wincmd J
+            elseif s:position == 'top'
+                wincmd K
+            end
 
-        let height = len(s:search) + s:totalMatches
-        if height > 10
-            let height = 10
+            let height = len(s:search) + s:totalMatches
+            if height > 10
+                let height = 10
+            end
+            exe height . 'wincmd _'
+        elseif s:position == 'right'
+            wincmd L
+        else " if s:position == 'left'
+            wincmd H
         end
-        exe height . 'wincmd _'
-    elseif s:position == 'right'
-        wincmd L
-    else " if s:position == 'left'
-        wincmd H
     end
 
     enew
@@ -295,7 +298,7 @@ function! s:createSearchWindow()
     let s:searchWindowId = win_getid()
 
     " Create mappings
-    if g:searchReplace_closeOnExit
+    if g:searchReplace.close_on_exit
         au BufLeave <buffer> bd
     end
     nnoremap                 <buffer>q     <C-W>c
@@ -506,13 +509,13 @@ function! s:search_editLine()
     let firstLine = line('.')
     if text =~ '^> '
         let filename = s:extractFilename(text)
-        execute g:searchReplace_editCommand . ' ' . filename
+        execute g:searchReplace.edit_command . ' ' . filename
     elseif text =~ '^\d\+:'
         let lineNumber = s:extractLineNumber(getline('.'))
         let previousFilenameLine = search('^> .*', 'nb')
         let filenameLine = getline(previousFilenameLine)
         let filename = s:extractFilename(filenameLine)
-        execute g:searchReplace_editCommand . ' ' . filename
+        execute g:searchReplace.edit_command . ' ' . filename
         execute 'normal! ' . lineNumber . 'gg'
     end
     normal! zvzz
@@ -589,4 +592,4 @@ function! s:on_exit(...) dict
 endfunction
 
 
-let g:searchReplace = s:
+let g:searchReplace# = s:
