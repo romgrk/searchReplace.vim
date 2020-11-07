@@ -47,14 +47,18 @@ The regex patterns supported are the subset of what is supported by both
 ## Configuration
 
 ```vim
+
+" Create configuration object if it doesn't exist
+let g:searchReplace = get(g:, 'searchReplace', {})
+
 " Closes window on BufLeave event
-let g:searchReplace_closeOnExit = v:true
+let g:searchReplace.close_on_exit = v:true
 
 " The edit comment to use to open files
-let g:searchReplace_editCommand = 'MyEdit'
+let g:searchReplace.edit_command = 'EditPreviousWindow'
 
 " for example, this can be used to unfocus the search window
 " before opening the match
-command! -nargs=1 MyEdit :execute 'wincmd p | edit ' . <f-args>
+command! -nargs=1 EditPreviousWindow :execute 'wincmd p | edit ' . <f-args>
 
 ```
