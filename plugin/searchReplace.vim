@@ -5,17 +5,26 @@
 " Description: Search & Replace plugin
 "============================================================================
 
+augroup searchReplace_save
+    au VimEnter *    call s:restore()
+    au VimLeavePre * call s:save()
+augroup END
+
 let searchReplace = extend({
 \  'close_on_exit': get(g:, 'searchReplace_closeOnExit', v:true),
 \  'edit_command': get(g:, 'searchReplace_editCommand', 'edit'),
 \  'open_window': v:null,
 \}, get(g:, 'searchReplace', {}))
 
+let s:CACHE_FILE = stdpath('cache') . '/searchReplace.json'
+
 let s:directory = '.'
 let s:pattern = ''
 let s:paths = []
 let s:caseSensitive = v:true
 let s:replacement = ''
+let s:previousPatterns = []
+let s:previousPatternsIndex = -1
 
 let s:isSearching = v:false
 let s:totalMatches = 0
@@ -72,6 +81,8 @@ function! s:runSearch()
     let s:replacementJobs = []
     let s:search = {}
     let s:matches = []
+
+    let s:previousPatterns = ([s:pattern] + s:previousPatterns)[:10]
 
     let s:command =
         \ "rg --json "
@@ -287,7 +298,7 @@ function! s:createSearchWindow() abort
         end
     end
 
-    enew
+    noautocmd enew
     file SearchReplace
     setlocal nonumber
     setlocal buftype=nofile
@@ -316,6 +327,8 @@ function! s:createSearchWindow() abort
 endfunction
 
 function! s:createPromptWindow()
+    let s:previousPatternsIndex = -1
+
     " Go to existing window if there is one
     if bufnr('SearchReplace__prompt') != -1
         let winids = win_findbuf(bufnr('SearchReplace__prompt'))
@@ -362,6 +375,10 @@ function! s:createPromptWindow()
     inoremap         <silent><buffer><C-u> <Esc>:call <SID>prompt_clearLine()<CR>
     inoremap         <silent><buffer><A-w> <Esc>:call <SID>prompt_switchWordMode()<CR>
     inoremap <silent><nowait><buffer><A-i> <Esc>:call <SID>prompt_switchCaseSensitiveMode()<CR>
+    inoremap         <silent><buffer><C-p> <Esc>:call <SID>prompt_previous()<CR>
+    inoremap         <silent><buffer><C-n> <Esc>:call <SID>prompt_next()<CR>
+    inoremap         <silent><buffer><A-k> <Esc>:call <SID>prompt_previous()<CR>
+    inoremap         <silent><buffer><A-j> <Esc>:call <SID>prompt_next()<CR>
 
     nnoremap                 <buffer>o     <Nop>
     nnoremap                 <buffer>O     <Nop>
@@ -468,6 +485,37 @@ function! s:prompt_clearLine ()
     call feedkeys('A', 'n')
 endfunc
 
+function! s:prompt_previous()
+    if s:previousPatternsIndex + 1 >= len(s:previousPatterns)
+        call feedkeys('ggA', 'n')
+        return
+    end
+    if s:previousPatternsIndex == -1
+        let s:pattern = s:extractPattern(getline(1))
+    end
+    let s:previousPatternsIndex += 1
+    let previous = s:previousPatterns[s:previousPatternsIndex]
+    let text = s:promptPattern . previous
+    call setline(1, text)
+    call feedkeys('ggA', 'n')
+endfunc
+
+function! s:prompt_next()
+    if s:previousPatternsIndex - 1 <= -2
+        call feedkeys('ggA', 'n')
+        return
+    end
+    let s:previousPatternsIndex -= 1
+    if s:previousPatternsIndex == -1
+        let next = s:pattern
+    else
+        let next = s:previousPatterns[s:previousPatternsIndex]
+    end
+    let text = s:promptPattern . next
+    call setline(1, text)
+    call feedkeys('ggA', 'n')
+endfunc
+
 function! s:prompt_switchWordMode ()
     let s:pattern = s:extractPattern(getline(1))
     if s:pattern[0:1] ==# '\b' && s:pattern[-2:-1] ==# '\b'
@@ -563,6 +611,22 @@ function! SearchWindowFoldLevel (lnum)
         return 0
     end
     return 1
+endfunc
+
+function s:save()
+    call writefile([json_encode(s:previousPatterns)], s:CACHE_FILE)
+endfunc
+
+function s:restore()
+    try
+        if !filereadable(s:CACHE_FILE)
+            return
+        end
+        let data = json_decode(join(readfile(s:CACHE_FILE), ""))
+    catch '*'
+        return
+    endtry
+    let s:previousPatterns = data
 endfunc
 
 " runs a command then calls Fn handler
