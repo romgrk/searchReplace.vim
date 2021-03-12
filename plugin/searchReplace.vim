@@ -303,6 +303,7 @@ function! s:createSearchWindow() abort
     setlocal nonumber
     setlocal buftype=nofile
     setlocal nobuflisted
+    setlocal signcolumn=no
     setlocal foldmethod=expr
     setlocal foldexpr=SearchWindowFoldLevel(v:lnum)
 
