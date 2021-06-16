@@ -40,6 +40,7 @@ let s:position = 'right'
 let s:parentWindowId = v:null
 let s:promptWindowId = v:null
 let s:searchWindowId = v:null
+let s:searchBufferId = v:null
 
 let s:promptPattern     = 'Pattern      '
 let s:promptDirectories = 'Directories  '
@@ -96,6 +97,7 @@ function! s:runSearch()
     let s:job.buffer = v:null
     let s:job.stdout = []
     let s:job.stderr = []
+    let s:job.pty = 1
     let s:job.didExit = v:false
     let s:job.on_stdout = function('s:onStdout')
     let s:job.on_stderr = function('s:onStderr')
@@ -209,10 +211,10 @@ function! s:appendMatch(match)
     if a:match.type == 'begin'
         let filepath = a:match.data.path.text
         if len(s:matches) == 0
-            call setline(1, '> ' . (filepath))
+            call nvim_buf_set_lines(s:searchBufferId, 0, 1, v:false, ['> ' . (filepath)])
         else
-            call append(line('$'), '')
-            call append(line('$'), '> ' . (filepath))
+            call nvim_buf_set_lines(s:searchBufferId, -1, -1, v:false, [''])
+            call nvim_buf_set_lines(s:searchBufferId, -1, -1, v:false, ['> ' . (filepath)])
         end
         return
     end
@@ -224,13 +226,13 @@ function! s:appendMatch(match)
     call add(s:matches, a:match)
 
     let prefix = '' . a:match.data.line_number . ': '
-    let lineNumber = line('$')
+    let lineNumber = nvim_buf_line_count(s:searchBufferId)
 
     let text = substitute(a:match.data.lines.text, '\n', '', '')
     let initial_length = len(text)
     let text = substitute(text, '\v^\s*', '', '')
     let offset = initial_length - len(text)
-    call append(lineNumber, prefix . text)
+    call nvim_buf_set_lines(s:searchBufferId, -1, -1, v:false, [prefix . text])
 
     for submatch in a:match.data.submatches
         let lineNumber = line('$') - 1
@@ -239,7 +241,7 @@ function! s:appendMatch(match)
         let columnEnd   = columnStart + length
 
         call nvim_buf_add_highlight(
-            \ 0, s:hlNamespace, 'SearchReplaceMatch',
+            \ s:searchBufferId, s:hlNamespace, 'SearchReplaceMatch',
             \ lineNumber, columnStart, columnEnd)
     endfor
 endfunction
@@ -308,6 +310,7 @@ function! s:createSearchWindow() abort
     setlocal foldexpr=SearchWindowFoldLevel(v:lnum)
 
     let s:searchWindowId = win_getid()
+    let s:searchBufferId = nvim_get_current_buf()
 
     " Create mappings
     if g:searchReplace.close_on_exit
@@ -640,6 +643,7 @@ function! s:run(cmd, cwd, Fn)
     let opts.on_stdout = function('s:on_stdout')
     let opts.on_stderr = function('s:on_stderr')
     let opts.on_exit = function('s:on_exit')
+    let opts.pty = 1
     let opts.handler = a:Fn
     let opts.jobID = jobstart(a:cmd, opts)
     return opts
@@ -655,6 +659,5 @@ function! s:on_exit(...) dict
     let self.stderr = filter(self.stderr, "v:val != ''")
     call self.handler(self)
 endfunction
-
 
 let g:searchReplace# = s:
