@@ -300,6 +300,9 @@ function! s:createSearchWindow() abort
         end
     end
 
+    call nvim_win_set_option(0, 'winfixwidth',  v:true)
+    call nvim_win_set_option(0, 'winfixheight', v:true)
+
     noautocmd enew
     file SearchReplace
     setlocal nonumber
