@@ -104,9 +104,6 @@ function! s:runSearch()
     let s:job.on_exit = function('s:onExit')
     let s:job.jobID = jobstart(s:job.cmd, s:job)
 
-    call s:echo('WarningMsg', 'Running search for ')
-    call s:echo('Normal', s:pattern)
-
     let s:isSearching = v:true
     let s:parentWindowId = win_getid()
 
@@ -303,8 +300,8 @@ function! s:createSearchWindow() abort
     call nvim_win_set_option(0, 'winfixwidth',  v:true)
     call nvim_win_set_option(0, 'winfixheight', v:true)
 
-    noautocmd enew
-    file SearchReplace
+    silent noautocmd enew
+    silent file SearchReplace
     setlocal nonumber
     setlocal buftype=nofile
     setlocal nobuflisted
