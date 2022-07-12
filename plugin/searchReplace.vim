@@ -59,6 +59,7 @@ hi default link SearchReplaceMatch  Search
 hi default link SearchReplaceFile   Directory
 hi default link SearchReplacePopup  NormalPopup
 hi default link SearchReplaceLabel  StatusLine
+hi default link SearchReplaceLineNr LineNr
 hi default link NormalPopup         Pmenu
 
 function! s:searchCommand (...)
@@ -225,10 +226,14 @@ function! s:appendMatch(match)
     let prefix = '' . a:match.data.line_number . ': '
     let lineNumber = nvim_buf_line_count(s:searchBufferId)
 
+    let max_length = 250
+
     let text = substitute(a:match.data.lines.text, '\n', '', '')
     let initial_length = len(text)
     let text = substitute(text, '\v^\s*', '', '')
     let offset = initial_length - len(text)
+    let text = text[:max_length]
+
     call nvim_buf_set_lines(s:searchBufferId, -1, -1, v:false, [prefix . text])
 
     for submatch in a:match.data.submatches
@@ -236,6 +241,9 @@ function! s:appendMatch(match)
         let length = len(submatch.match.text)
         let columnStart = submatch.start + len(prefix) - offset
         let columnEnd   = columnStart + length
+        if columnEnd > max_length
+            return
+        end
 
         call nvim_buf_add_highlight(
             \ s:searchBufferId, s:hlNamespace, 'SearchReplaceMatch',
@@ -300,6 +308,7 @@ function! s:createSearchWindow() abort
     call nvim_win_set_option(0, 'winfixwidth',  v:true)
     call nvim_win_set_option(0, 'winfixheight', v:true)
 
+    set nohlsearch
     silent noautocmd enew
     silent file SearchReplace
     setlocal nonumber
@@ -326,8 +335,8 @@ function! s:createSearchWindow() abort
 
     " Add highlights
     call matchadd('Comment', '^> ', 0)
-    call matchadd('Directory', '\v(\> )@<=.*', 0)
-    call matchadd('LineNr', '\v^\d+:', 0)
+    call matchadd('Directory', '\v(^\> )@<=.*', 0)
+    call matchadd('SearchReplaceLineNr', '\v^\d+:', 0)
 endfunction
 
 function! s:createPromptWindow()
