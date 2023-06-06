@@ -18,9 +18,9 @@ let searchReplace = extend({
 
 let s:CACHE_FILE = stdpath('cache') . '/searchReplace.json'
 
-let s:directory = '.'
+let s:directory = ''
 let s:pattern = ''
-let s:paths = []
+let s:globs = []
 let s:caseSensitive = v:true
 let s:replacement = ''
 let s:previousPatterns = []
@@ -64,8 +64,8 @@ hi default link NormalPopup         Pmenu
 
 function! s:searchCommand (...)
     if a:0 > 0
-        let s:pattern = a:000[0]
-        let s:paths   = a:000[1:]
+        let s:pattern   = a:000[0]
+        let s:directory = len(a:000) > 1 && empty(join(a:000[1:], '')) ? '' : join(a:000[1:], '')
         call s:runSearch()
     else
         call s:createPromptWindow()
@@ -74,7 +74,7 @@ endfunc
 
 function! s:runSearch()
     " global s:pattern
-    " global s:paths
+    " global s:globs
     let s:replacement = ''
     let s:totalMatches = 0
     let s:waitingCount = 0
@@ -87,14 +87,17 @@ function! s:runSearch()
     let s:previousPatterns = ([s:pattern] + s:previousPatterns)[:10]
 
     let s:command =
-        \ "rg --json "
+        \ "rg"
+        \ . " --json "
+        \ . " --sort-files "
         \ . (s:caseSensitive ? "" : "--smart-case ")
-        \ . join(map(copy(s:paths), {_,v -> '--glob ' . shellescape(v)}), " ")
+        \ . join(map(copy(s:globs), {_,v -> '--glob ' . shellescape(v)}), " ")
         \ . " " . shellescape(s:pattern)
+        \ . " " . shellescape(empty(s:directory) ? '.' : s:directory)
 
+    echom s:command
     let s:job = {}
     let s:job.cmd = s:command
-    let s:job.cwd = fnamemodify(expand(s:directory), ':p')
     let s:job.buffer = v:null
     let s:job.stdout = []
     let s:job.stderr = []
@@ -403,7 +406,7 @@ function! s:createPromptWindow()
 
     " Add text
     call append(0, s:promptPattern . (is_search_open ? s:pattern : ''))
-    call append(1, s:promptDirectories . join(s:paths, ', '))
+    call append(1, s:promptDirectories . s:directory)
 
     call feedkeys('ggA', 'n')
 endfunction
@@ -478,7 +481,7 @@ endfunction
 
 function! s:prompt_enter ()
     let s:pattern = s:extractPattern(getline(1))
-    let s:paths   = s:extractDirectories(getline(2))
+    let s:directory = s:extractDirectory(getline(2))
     call s:closePromptWindow()
     call s:runSearch()
 endfunc
@@ -612,10 +615,8 @@ function! s:extractPattern (line)
     return substitute(a:line, s:promptPatternRe, '', '')
 endfunc
 
-function! s:extractDirectories (line)
-    let input = substitute(a:line, s:promptDirectories, '', '')
-    let dirs = split(input, '\s*,\s*')
-    return dirs
+function! s:extractDirectory (line)
+    return fnamemodify(substitute(a:line, s:promptDirectories, '', ''), ':p')
 endfunc
 
 function! SearchWindowFoldLevel (lnum)
